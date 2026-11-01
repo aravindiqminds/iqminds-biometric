@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>IQMINDS - Staff Biometric Registration</title>
+  <title>IQMINDS - Staff Registration (MFS110)</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 min-h-screen py-10 px-4">
   <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
     <div class="bg-indigo-700 px-6 py-4 text-white">
       <h1 class="text-xl font-bold">IQMINDS - Staff Registration Portal</h1>
-      <p class="text-xs text-indigo-200 mt-1">స్టాఫ్ ప్రొఫైల్ మరియు బయోమెట్రిక్ ఎన్‌రోల్‌మెంట్</p>
+      <p class="text-xs text-indigo-200 mt-1">Mantra MFS110 Biometric Registration</p>
     </div>
 
     <form id="regForm" class="p-6 space-y-5">
@@ -21,7 +21,7 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Full Name</label>
-          <input type="text" id="staffName" placeholder="స్టాఫ్ పేరు" required
+          <input type="text" id="staffName" placeholder="Staff Name" required
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
@@ -29,7 +29,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Role / Designation</label>
-          <input type="text" id="staffRole" placeholder="e.g. Domain Trainer / MIS" required
+          <input type="text" id="staffRole" placeholder="e.g. Faculty / Trainer" required
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
@@ -39,7 +39,6 @@
         </div>
       </div>
 
-      <!-- Identity Document Details -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">PAN Card Number</label>
@@ -47,23 +46,22 @@
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 uppercase">
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Aadhaar Ref / Notes</label>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">ID Document Reference</label>
           <input type="text" id="idDocRef" placeholder="Doc Reference / Status"
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
 
-      <!-- Photo File -->
       <div>
         <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Passport Size Photo</label>
         <input type="file" id="photoFile" accept="image/*" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
       </div>
 
-      <!-- Biometric Scanner Section -->
+      <!-- Biometric Box -->
       <div class="border rounded-xl p-4 bg-slate-50 flex items-center justify-between">
         <div>
-          <p id="bioText" class="text-sm font-semibold text-slate-700">Mantra Thumb Scan చేయండి</p>
-          <p id="bioScore" class="text-xs text-slate-400">Device Ready</p>
+          <p id="bioText" class="text-sm font-semibold text-slate-700">MFS110 Device Ready గా ఉంచండి</p>
+          <p id="bioScore" class="text-xs text-slate-400">Finger scan చేయండి</p>
         </div>
         <button type="button" id="scanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg">
           Scan Thumb
@@ -71,67 +69,114 @@
       </div>
 
       <button type="submit" id="submitBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition">
-        Save to Firebase & Register
+        Save to Firestore
       </button>
     </form>
   </div>
 
   <script type="module">
-    import { db, storage } from "./firebase-config.js";
+    import { db } from "./firebase-config.js";
     import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
     let capturedTemplate = "";
 
-    // 1. Mantra Fingerprint Capture
+    // 1. Resilient Mantra Port Detection
+    async function getActiveMantraPort() {
+      const ports = [11100, 11101, 11102, 11103, 11104, 11105];
+      for (const port of ports) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 600);
+          const res = await fetch(`https://127.0.0.1:${port}/`, {
+            method: "RDSERVICE",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (res.ok || res.status === 200) return port;
+        } catch (e) {}
+      }
+      return 11100;
+    }
+
+    // 2. Photo Compression to Base64
+    function compressPhoto(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) return reject(new Error("No file selected"));
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (e) => {
+          const img = new Image();
+          img.src = e.target.result;
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const scale = 250 / img.width;
+            canvas.width = 250;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", 0.75));
+          };
+          img.onerror = () => reject(new Error("Image decoding failed"));
+        };
+        reader.onerror = () => reject(new Error("File reading failed"));
+      });
+    }
+
+    // 3. Scan Button
     document.getElementById("scanBtn").addEventListener("click", async () => {
       const bioText = document.getElementById("bioText");
       const bioScore = document.getElementById("bioScore");
-      bioText.innerText = "Scanning... ఫింగర్ పెట్టండి";
+      bioText.innerText = "Scanning... MFS110 పై వేలు ఉంచండి";
 
       const pidOptions = `<PidOptions ver="1.0"><Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>`;
 
       try {
-        const res = await fetch("https://127.0.0.1:11100/rd/capture", {
+        const port = await getActiveMantraPort();
+        const res = await fetch(`https://127.0.0.1:${port}/rd/capture`, {
           method: "CAPTURE",
           headers: { "Content-Type": "text/xml" },
           body: pidOptions
         });
+
         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
         const respNode = xml.getElementsByTagName("Resp")[0];
 
-        if (respNode.getAttribute("errCode") === "0") {
+        if (respNode && respNode.getAttribute("errCode") === "0") {
           capturedTemplate = xml.getElementsByTagName("Data")[0].textContent;
           bioText.innerText = "✅ థంబ్ స్కాన్ విజయవంతమైంది!";
-          bioScore.innerText = `Quality: ${respNode.getAttribute("qScore")}%`;
+          bioScore.innerText = `Quality Score: ${respNode.getAttribute("qScore")}% (Port: ${port})`;
         } else {
-          bioText.innerText = "❌ స్కాన్ ఫెయిల్ అయింది!";
-          bioScore.innerText = respNode.getAttribute("errInfo");
+          bioText.innerText = "❌ స్కాన్ విఫలమైంది!";
+          bioScore.innerText = respNode ? respNode.getAttribute("errInfo") : "Unknown device error";
         }
       } catch (err) {
-        bioText.innerText = "❌ Mantra RD Service Not Detected!";
+        bioText.innerText = "❌ Mantra MFS110 RD Service రన్ అవ్వడం లేదు!";
       }
     });
 
-    // 2. Submit to Firebase
+    // 4. Form Submit with Null Checks
     document.getElementById("regForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!capturedTemplate) return alert("దయచేసి స్టాఫ్ థంబ్ స్కాన్ చేయండి!");
+
+      const photoInput = document.getElementById("photoFile");
+      if (!photoInput.files || !photoInput.files[0]) {
+        alert("దయచేసి స్టాఫ్ పాస్‌పోర్ట్ సైజ్ ఫోటోను ఎంచుకోండి!");
+        return;
+      }
+
+      if (!capturedTemplate) {
+        alert("దయచేసి MFS110 థంబ్ స్కాన్ పూర్తి చేయండి!");
+        return;
+      }
 
       const submitBtn = document.getElementById("submitBtn");
       submitBtn.disabled = true;
-      submitBtn.innerText = "Uploading to Cloud...";
+      submitBtn.innerText = "Saving to Database...";
 
       try {
         const staffId = document.getElementById("staffId").value.trim();
-        const photoFile = document.getElementById("photoFile").files[0];
+        const photoBase64 = await compressPhoto(photoInput.files[0]);
 
-        // Upload photo to Firebase Storage
-        const storageRef = ref(storage, `staff_photos/${staffId}_${photoFile.name}`);
-        const uploadResult = await uploadBytes(storageRef, photoFile);
-        const photoUrl = await getDownloadURL(uploadResult.ref);
-
-        // Save details to Firestore
         await setDoc(doc(db, "staff", staffId), {
           id: staffId,
           name: document.getElementById("staffName").value.trim(),
@@ -139,18 +184,18 @@
           phone: document.getElementById("staffPhone").value.trim(),
           panNumber: document.getElementById("panNumber").value.trim(),
           idDocRef: document.getElementById("idDocRef").value.trim(),
-          photoUrl: photoUrl,
+          photoUrl: photoBase64,
           biometricTemplate: capturedTemplate,
           createdAt: new Date().toISOString()
         });
 
-        alert("✅ స్టాఫ్ ప్రొఫైల్ Firebase లో విజయవంతంగా సేవ్ అయింది!");
+        alert("✅ స్టాఫ్ ప్రొఫైల్ మరియు బయోమెట్రిక్ విజయవంతంగా సేవ్ అయ్యాయి!");
         window.location.reload();
       } catch (err) {
-        alert("Upload Error: " + err.message);
+        alert("Save Error: " + err.message);
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerText = "Save to Firebase & Register";
+        submitBtn.innerText = "Save to Firestore";
       }
     });
   </script>
