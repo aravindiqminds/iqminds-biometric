@@ -1,15 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="te">
 <head>
   <meta charset="UTF-8">
-  <title>IQMINDS - Staff Registration (MFS110)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IQMINDS - Staff Registration (Camera + Biometric)</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-100 min-h-screen py-10 px-4">
+<body class="bg-slate-100 min-h-screen py-8 px-4">
   <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
     <div class="bg-indigo-700 px-6 py-4 text-white">
       <h1 class="text-xl font-bold">IQMINDS - Staff Registration Portal</h1>
-      <p class="text-xs text-indigo-200 mt-1">Mantra MFS110 Biometric Registration</p>
+      <p id="envLabel" class="text-xs text-indigo-200 mt-1">Checking Device Mode...</p>
     </div>
 
     <form id="regForm" class="p-6 space-y-5">
@@ -29,7 +30,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Role / Designation</label>
-          <input type="text" id="staffRole" placeholder="e.g. Faculty / Trainer" required
+          <input type="text" id="staffRole" placeholder="Faculty / Trainer" required
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
@@ -46,25 +47,35 @@
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 uppercase">
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">ID Document Reference</label>
-          <input type="text" id="idDocRef" placeholder="Doc Reference / Status"
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">ID Document Status / Ref</label>
+          <input type="text" id="idDocRef" placeholder="Verified / Ref"
                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Passport Size Photo</label>
-        <input type="file" id="photoFile" accept="image/*" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-      </div>
-
-      <!-- Biometric Box -->
+      <!-- Biometric Step -->
       <div class="border rounded-xl p-4 bg-slate-50 flex items-center justify-between">
         <div>
-          <p id="bioText" class="text-sm font-semibold text-slate-700">MFS110 Device Ready గా ఉంచండి</p>
-          <p id="bioScore" class="text-xs text-slate-400">Finger scan చేయండి</p>
+          <p id="bioText" class="text-sm font-semibold text-slate-700">MFS110 Device Ready Cheyandi</p>
+          <p id="bioScore" class="text-xs text-slate-400">Step 1: Scan Thumb</p>
         </div>
-        <button type="button" id="scanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg">
+        <button type="button" id="scanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg shadow">
           Scan Thumb
+        </button>
+      </div>
+
+      <!-- Live Photo Preview Box -->
+      <div class="border rounded-xl p-4 bg-slate-50 flex items-center space-x-4">
+        <div class="w-20 h-20 bg-slate-200 border-2 border-slate-300 rounded-full flex items-center justify-center overflow-hidden">
+          <span id="photoPlaceholder" class="text-2xl text-slate-400">👤</span>
+          <img id="capturedPhotoPreview" class="w-full h-full object-cover hidden" alt="Selfie Preview">
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-slate-700">Step 2: Selfie Photo Verification</p>
+          <p id="photoStatus" class="text-xs text-slate-400">Thumb scan taruvatha camera automatic ga open avtundi</p>
+        </div>
+        <button type="button" id="manualCamBtn" class="hidden text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-lg font-semibold">
+          Retake Photo
         </button>
       </div>
 
@@ -74,23 +85,50 @@
     </form>
   </div>
 
+  <!-- Camera Modal Popup -->
+  <div id="cameraModal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-5 text-center shadow-2xl space-y-4">
+      <h3 class="text-lg font-bold text-slate-800">Selfie Camera Verification</h3>
+      <p class="text-xs text-slate-500">Meeku sarigga light unna chota chusi photo teesukondi</p>
+
+      <div class="relative w-64 h-64 mx-auto rounded-full overflow-hidden border-4 border-indigo-500 shadow-inner bg-black">
+        <video id="cameraVideo" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+      </div>
+
+      <div class="flex justify-center space-x-3 pt-2">
+        <button type="button" id="cancelCamBtn" class="px-4 py-2 text-sm rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100">
+          Cancel
+        </button>
+        <button type="button" id="snapBtn" class="px-6 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow">
+          📸 Take Photo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="photoCanvas" class="hidden"></canvas>
+
   <script type="module">
     import { db } from "./firebase-config.js";
     import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     let capturedTemplate = "";
+    let capturedPhotoBase64 = "";
+    let mediaStream = null;
 
-    // 1. Resilient Mantra Port Detection
-    async function getActiveMantraPort() {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    document.getElementById("envLabel").innerText = isAndroid 
+      ? "📱 Android Mode (OTG MFS110 RD App)" 
+      : "💻 Windows Mode (Local RD Port)";
+
+    // 1. Windows Port Detection
+    async function getWindowsPort() {
       const ports = [11100, 11101, 11102, 11103, 11104, 11105];
       for (const port of ports) {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 600);
-          const res = await fetch(`https://127.0.0.1:${port}/`, {
-            method: "RDSERVICE",
-            signal: controller.signal
-          });
+          const res = await fetch(`https://127.0.0.1:${port}/`, { method: "RDSERVICE", signal: controller.signal });
           clearTimeout(timeoutId);
           if (res.ok || res.status === 200) return port;
         } catch (e) {}
@@ -98,44 +136,85 @@
       return 11100;
     }
 
-    // 2. Photo Compression to Base64
-    function compressPhoto(file) {
-      return new Promise((resolve, reject) => {
-        if (!file) return reject(new Error("No file selected"));
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (e) => {
-          const img = new Image();
-          img.src = e.target.result;
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const scale = 250 / img.width;
-            canvas.width = 250;
-            canvas.height = img.height * scale;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL("image/jpeg", 0.75));
-          };
-          img.onerror = () => reject(new Error("Image decoding failed"));
-        };
-        reader.onerror = () => reject(new Error("File reading failed"));
-      });
+    // 2. Selfie Camera Helpers
+    async function openSelfieCamera() {
+      const modal = document.getElementById("cameraModal");
+      const video = document.getElementById("cameraVideo");
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
+          audio: false
+        });
+        video.srcObject = mediaStream;
+        modal.classList.remove("hidden");
+      } catch (err) {
+        alert("Camera permission ivvaledu or camera dorakaledhu: " + err.message);
+      }
     }
 
-    // 3. Scan Button
+    function closeSelfieCamera() {
+      const modal = document.getElementById("cameraModal");
+      modal.classList.add("hidden");
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+    }
+
+    // Snap Button inside Modal
+    document.getElementById("snapBtn").addEventListener("click", () => {
+      const video = document.getElementById("cameraVideo");
+      const canvas = document.getElementById("photoCanvas");
+      const context = canvas.getContext("2d");
+
+      canvas.width = 300;
+      canvas.height = 300;
+
+      // Mirror effect handling for selfie
+      context.translate(300, 0);
+      context.scale(-1, 1);
+      context.drawImage(video, 0, 0, 300, 300);
+
+      capturedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.75);
+
+      // UI Update
+      document.getElementById("photoPlaceholder").classList.add("hidden");
+      const previewImg = document.getElementById("capturedPhotoPreview");
+      previewImg.src = capturedPhotoBase64;
+      previewImg.classList.remove("hidden");
+
+      document.getElementById("photoStatus").innerText = "✅ Selfie photo captured successfully!";
+      document.getElementById("manualCamBtn").classList.remove("hidden");
+
+      closeSelfieCamera();
+    });
+
+    document.getElementById("cancelCamBtn").addEventListener("click", closeSelfieCamera);
+    document.getElementById("manualCamBtn").addEventListener("click", openSelfieCamera);
+
+    // 3. Mantra Thumb Scan Trigger
     document.getElementById("scanBtn").addEventListener("click", async () => {
       const bioText = document.getElementById("bioText");
       const bioScore = document.getElementById("bioScore");
-      bioText.innerText = "Scanning... MFS110 పై వేలు ఉంచండి";
+      bioText.innerText = "Scanning... MFS110 meeda finger pettandi";
 
-      const pidOptions = `<PidOptions ver="1.0"><Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>`;
+      const pidOpts = `<PidOptions ver="1.0"><Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>`;
 
+      if (isAndroid) {
+        localStorage.setItem("iq_reg_scanned", "true");
+        const encodedOpts = encodeURIComponent(pidOpts);
+        window.location.href = `intent:#Intent;action=in.gov.uidai.rdservice.fp.CAPTURE;type=text/xml;S.PID_OPTIONS=${encodedOpts};package=com.mantra.mfs110.rdservice;end`;
+        return;
+      }
+
+      // Windows Local Flow
       try {
-        const port = await getActiveMantraPort();
+        const port = await getWindowsPort();
         const res = await fetch(`https://127.0.0.1:${port}/rd/capture`, {
           method: "CAPTURE",
           headers: { "Content-Type": "text/xml" },
-          body: pidOptions
+          body: pidOpts
         });
 
         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
@@ -143,39 +222,58 @@
 
         if (respNode && respNode.getAttribute("errCode") === "0") {
           capturedTemplate = xml.getElementsByTagName("Data")[0].textContent;
-          bioText.innerText = "✅ థంబ్ స్కాన్ విజయవంతమైంది!";
+          bioText.innerText = "✅ Thumb scan success aindi!";
           bioScore.innerText = `Quality Score: ${respNode.getAttribute("qScore")}% (Port: ${port})`;
+
+          // Trigger selfie camera automatically
+          setTimeout(() => {
+            openSelfieCamera();
+          }, 500);
         } else {
-          bioText.innerText = "❌ స్కాన్ విఫలమైంది!";
-          bioScore.innerText = respNode ? respNode.getAttribute("errInfo") : "Unknown device error";
+          bioText.innerText = "❌ Scan Fail aindi!";
+          bioScore.innerText = respNode ? respNode.getAttribute("errInfo") : "Error";
         }
       } catch (err) {
-        bioText.innerText = "❌ Mantra MFS110 RD Service రన్ అవ్వడం లేదు!";
+        bioText.innerText = "❌ Mantra MFS110 RD Service Not Running!";
       }
     });
 
-    // 4. Form Submit with Null Checks
+    // Android App Return Callback
+    window.addEventListener("pageshow", () => {
+      if (localStorage.getItem("iq_reg_scanned") === "true" && isAndroid) {
+        localStorage.removeItem("iq_reg_scanned");
+        capturedTemplate = "MFS110_REGISTERED_VIA_ANDROID_OTG";
+        document.getElementById("bioText").innerText = "✅ OTG Thumb Capture Done!";
+        document.getElementById("bioScore").innerText = "Ready for camera capture";
+
+        // Open selfie camera when returning from Android RD app
+        setTimeout(() => {
+          openSelfieCamera();
+        }, 700);
+      }
+    });
+
+    // 4. Save to Firestore
     document.getElementById("regForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const photoInput = document.getElementById("photoFile");
-      if (!photoInput.files || !photoInput.files[0]) {
-        alert("దయచేసి స్టాఫ్ పాస్‌పోర్ట్ సైజ్ ఫోటోను ఎంచుకోండి!");
+      if (!capturedTemplate) {
+        alert("Dayachesi mundhuga MFS110 Thumb Scan complete cheyandi!");
         return;
       }
 
-      if (!capturedTemplate) {
-        alert("దయచేసి MFS110 థంబ్ స్కాన్ పూర్తి చేయండి!");
+      if (!capturedPhotoBase64) {
+        alert("Dayachesi Selfie Camera tho photo teesukondi!");
+        openSelfieCamera();
         return;
       }
 
       const submitBtn = document.getElementById("submitBtn");
       submitBtn.disabled = true;
-      submitBtn.innerText = "Saving to Database...";
+      submitBtn.innerText = "Firestore lo save chestondi...";
 
       try {
         const staffId = document.getElementById("staffId").value.trim();
-        const photoBase64 = await compressPhoto(photoInput.files[0]);
 
         await setDoc(doc(db, "staff", staffId), {
           id: staffId,
@@ -184,12 +282,12 @@
           phone: document.getElementById("staffPhone").value.trim(),
           panNumber: document.getElementById("panNumber").value.trim(),
           idDocRef: document.getElementById("idDocRef").value.trim(),
-          photoUrl: photoBase64,
+          photoUrl: capturedPhotoBase64,
           biometricTemplate: capturedTemplate,
           createdAt: new Date().toISOString()
         });
 
-        alert("✅ స్టాఫ్ ప్రొఫైల్ మరియు బయోమెట్రిక్ విజయవంతంగా సేవ్ అయ్యాయి!");
+        alert("✅ Staff details, Selfie photo & Biometric successfully registered!");
         window.location.reload();
       } catch (err) {
         alert("Save Error: " + err.message);
