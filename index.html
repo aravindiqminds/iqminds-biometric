@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IQMINDS - Staff Attendance Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+  <div class="max-w-md w-full bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 p-8 text-center">
+    <h1 class="text-2xl font-bold text-white tracking-wide">IQMINDS Attendance</h1>
+    <p class="text-xs text-slate-400 mb-6">Staff Biometric Verification</p>
+
+    <div class="relative w-44 h-44 mx-auto mb-6">
+      <div id="placeholderImg" class="w-full h-full rounded-full bg-slate-700 border-4 border-slate-600 flex items-center justify-center text-4xl text-slate-400">
+        👤
+      </div>
+      <img id="staffPhoto" class="w-full h-full rounded-full object-cover border-4 border-emerald-500 shadow-lg hidden" alt="Staff Profile">
+    </div>
+
+    <h2 id="staffName" class="text-xl font-bold text-white tracking-wide">సిస్టమ్ సిద్ధంగా ఉంది</h2>
+    <p id="staffRole" class="text-slate-400 text-sm mt-1 mb-4">MFS100 Connected</p>
+
+    <div id="statusBox" class="py-2.5 px-4 rounded-xl bg-slate-700/50 border border-slate-600 text-slate-300 text-sm font-medium mb-6">
+      పంచ్ చేయడానికి వేలు ఉంచండి
+    </div>
+
+    <button id="punchBtn" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow-lg transition active:scale-95 text-lg">
+      👉 Scan Thumb
+    </button>
+  </div>
+
+  <script type="module">
+    import { db } from "./firebase-config.js";
+    import { collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    document.getElementById("punchBtn").addEventListener("click", async () => {
+      const statusBox = document.getElementById("statusBox");
+      statusBox.innerText = "Scanning... ఫింగర్ ఉంచండి";
+      statusBox.className = "py-2.5 px-4 rounded-xl bg-amber-950/60 border border-amber-600 text-amber-300 text-sm font-medium mb-6";
+
+      const pidOptions = `<PidOptions ver="1.0"><Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P" /></PidOptions>`;
+
+      try {
+        const res = await fetch("https://127.0.0.1:11100/rd/capture", {
+          method: "CAPTURE",
+          headers: { "Content-Type": "text/xml" },
+          body: pidOptions
+        });
+
+        const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+        const respNode = xml.getElementsByTagName("Resp")[0];
+
+        if (respNode.getAttribute("errCode") === "0") {
+          const scannedTemplate = xml.getElementsByTagName("Data")[0].textContent;
+          statusBox.innerText = "Firestore లో సరిపోలుస్తోంది...";
+
+          // Fetch all staff from Firestore
+          const querySnapshot = await getDocs(collection(db, "staff"));
+          let matchedStaff = null;
+
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.biometricTemplate === scannedTemplate) {
+              matchedStaff = data;
+            }
+          });
+
+          if (matchedStaff) {
+            // Display photo and name
+            document.getElementById("placeholderImg").classList.add("hidden");
+            const img = document.getElementById("staffPhoto");
+            img.src = matchedStaff.photoUrl;
+            img.classList.remove("hidden");
+
+            document.getElementById("staffName").innerText = matchedStaff.name;
+            document.getElementById("staffRole").innerText = `${matchedStaff.role} (${matchedStaff.id})`;
+
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            // Record attendance log
+            await addDoc(collection(db, "attendance_logs"), {
+              staffId: matchedStaff.id,
+              name: matchedStaff.name,
+              timestamp: now.toISOString(),
+              time: timeString,
+              date: now.toISOString().split("T")[0]
+            });
+
+            statusBox.className = "py-2.5 px-4 rounded-xl bg-emerald-950/60 border border-emerald-600 text-emerald-300 text-sm font-semibold mb-6";
+            statusBox.innerText = `✅ Attendance Marked: ${timeString}`;
+          } else {
+            statusBox.className = "py-2.5 px-4 rounded-xl bg-red-950/60 border border-red-600 text-red-300 text-sm font-semibold mb-6";
+            statusBox.innerText = "❌ ఫింగర్‌ప్రింట్ మ్యాచ్ కాలేదు!";
+          }
+        }
+      } catch (err) {
+        statusBox.innerText = "Mantra Device RD Service Connect కాలేదు!";
+      }
+    });
+  </script>
+</body>
+</html>
